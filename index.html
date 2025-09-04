@@ -13,7 +13,6 @@
 
     body {
       font-family: 'Segoe UI', sans-serif;
-      /* Removed old background gradient */
       color: #ffffff;
       display: flex;
       justify-content: center;
@@ -23,7 +22,6 @@
       overflow: hidden;
     }
 
-    /* Video Background */
     #bgVideo {
       position: fixed;
       right: 0;
@@ -32,26 +30,24 @@
       min-height: 100vh;
       object-fit: cover;
       z-index: -2;
-      filter: brightness(1); /* darken video for readability */
+      filter: brightness(1);
     }
 
-    /* Optional overlay to darken video */
-    
-.container {
-  background: rgba(255, 255, 255, 0.15); /* lighter translucent white */
-  backdrop-filter: blur(5px);           /* stronger blur */
-  -webkit-backdrop-filter: blur(5px);   /* Safari support */
-  border-radius: 20px;
-  padding: 30px;
-  max-width: 500px;
-  width: 90%;
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  text-align: center;
-  animation: fadeIn 1s ease-in-out;
-  position: relative;
-  z-index: 1;
-}
+    .container {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      border-radius: 20px;
+      padding: 30px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      text-align: center;
+      animation: fadeIn 1s ease-in-out;
+      position: relative;
+      z-index: 1;
+    }
 
     h1 {
       font-size: 28px;
@@ -61,9 +57,9 @@
 
     input[type="file"] {
       margin: 15px 0;
-      background: rgba(255, 255, 255, 0.15); /* lighter translucent white */
-  backdrop-filter: blur(5px);           /* stronger blur */
-  -webkit-backdrop-filter: blur(5px);   /* Safari support */
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
       padding: 10px;
       border: none;
       border-radius: 5px;
@@ -90,6 +86,12 @@
     .controls button:hover {
       transform: scale(1.05);
       background: #2085dc;
+    }
+
+    .controls button.active {
+      background: #2085dc;
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(32, 133, 220, 0.8);
     }
 
     .volume-control {
@@ -138,9 +140,9 @@
     }
 
     .playlist li:hover {
-        background: rgba(41, 140, 233, 0.27); /* lighter translucent white */
-  backdrop-filter: blur(5px);           /* stronger blur */
-  -webkit-backdrop-filter: blur(5px);   /* Safari support */
+      background: rgba(41, 140, 233, 0.27);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
     }
 
     @keyframes fadeIn {
@@ -148,7 +150,6 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Scrollbar */
     .playlist::-webkit-scrollbar {
       width: 6px;
     }
@@ -161,9 +162,9 @@
 <body>
   <!-- Video background -->
   <video autoplay muted loop id="bgVideo">
-  <source src="https://www.dropbox.com/scl/fi/nv6r8ia3ezyvqtulczimz/bg.mp4?rlkey=xjrl70kayoyhmjjjb9mx41yir&st=cwusosk7&raw=1" type="video/mp4" />
-  Your browser does not support the video tag.
-</video>
+    <source src="https://www.dropbox.com/scl/fi/nv6r8ia3ezyvqtulczimz/bg.mp4?rlkey=xjrl70kayoyhmjjjb9mx41yir&st=cwusosk7&raw=1" type="video/mp4" />
+    Your browser does not support the video tag.
+  </video>
 
   <div class="container">
     <h1>🎶 Music Player</h1>
@@ -177,6 +178,8 @@
       <button onclick="stopAudio()">⏹</button>
       <button onclick="skip(-10)">⏪</button>
       <button onclick="skip(10)">⏩</button>
+      <button id="shuffleBtn" onclick="toggleShuffle()">🔀</button>
+      <button id="repeatBtn" onclick="toggleRepeat()">🔁</button>
     </div>
 
     <div class="volume-control">
@@ -191,64 +194,70 @@
     <audio id="audioPlayer" controls></audio>
   </div>
 
- <script>
-  const fileInput = document.getElementById('fileInput');
-  const audioPlayer = document.getElementById('audioPlayer');
-  const fileNameText = document.getElementById('fileName');
-  const volumeSlider = document.getElementById('volumeSlider');
-  const playlistEl = document.getElementById('playlist');
-  const canvas = document.getElementById('visualizer');
-  const ctx = canvas.getContext('2d');
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const fileNameText = document.getElementById('fileName');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const playlistEl = document.getElementById('playlist');
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
 
-  let audioCtx, analyser, source, dataArray, bufferLength;
-  let db;
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const repeatBtn = document.getElementById('repeatBtn');
 
-  // Initialize IndexedDB
-  const request = indexedDB.open('MusicDB', 1);
-  request.onerror = () => console.error('IndexedDB error');
-  request.onsuccess = (e) => {
-    db = e.target.result;
-    loadPlaylist();
-  };
-  request.onupgradeneeded = (e) => {
-    db = e.target.result;
-    db.createObjectStore('songs', { keyPath: 'name' });
-  };
+    let audioCtx, analyser, source, dataArray, bufferLength;
+    let db;
 
-  function initAudioVisualizer() {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      analyser = audioCtx.createAnalyser();
-      source = audioCtx.createMediaElementSource(audioPlayer);
-      source.connect(analyser);
-      analyser.connect(audioCtx.destination);
-      analyser.fftSize = 64;
-      bufferLength = analyser.frequencyBinCount;
-      dataArray = new Uint8Array(bufferLength);
-      drawVisualizer();
+    let isShuffle = false;
+    let isRepeat = false;
+    let currentSongIndex = -1;
+    let songsList = [];
+
+    // Initialize IndexedDB
+    const request = indexedDB.open('MusicDB', 1);
+    request.onerror = () => console.error('IndexedDB error');
+    request.onsuccess = (e) => {
+      db = e.target.result;
+      loadPlaylist();
+    };
+    request.onupgradeneeded = (e) => {
+      db = e.target.result;
+      db.createObjectStore('songs', { keyPath: 'name' });
+    };
+
+    function initAudioVisualizer() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        source = audioCtx.createMediaElementSource(audioPlayer);
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        analyser.fftSize = 64;
+        bufferLength = analyser.frequencyBinCount;
+        dataArray = new Uint8Array(bufferLength);
+        drawVisualizer();
+      }
     }
-  }
 
-  function drawVisualizer() {
-    requestAnimationFrame(drawVisualizer);
-    analyser.getByteFrequencyData(dataArray);
-    ctx.fillStyle = "rgba(255,255,255,0.05)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const barWidth = (canvas.width / bufferLength);
-    let x = 0;
-    for (let i = 0; i < bufferLength; i++) {
-      const barHeight = dataArray[i] / 2;
-      ctx.fillStyle = `rgb(${barHeight + 100}, ${200 - barHeight}, 255)`;
-      ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
-      x += barWidth;
+    function drawVisualizer() {
+      requestAnimationFrame(drawVisualizer);
+      analyser.getByteFrequencyData(dataArray);
+      ctx.fillStyle = "rgba(255,255,255,0.05)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const barWidth = (canvas.width / bufferLength);
+      let x = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = dataArray[i] / 2;
+        ctx.fillStyle = `rgb(${barHeight + 100}, ${200 - barHeight}, 255)`;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+        x += barWidth;
+      }
     }
-  }
 
-  fileInput.addEventListener('change', function () {
-    const file = this.files[0];
-    if (file && file.type.startsWith('audio/')) {
-      const reader = new FileReader();
-      reader.onload = function (e) {
+    fileInput.addEventListener('change', function () {
+      const file = this.files[0];
+      if (file && file.type.startsWith('audio/')) {
         const songData = {
           name: file.name,
           blob: file
@@ -263,74 +272,104 @@
           loadPlaylist();
           playSong(file.name);
         };
-      };
-      reader.readAsArrayBuffer(file);
-    }
-  });
-
-  function playAudio() {
-    if (audioPlayer.src) audioPlayer.play();
-  }
-
-  function pauseAudio() {
-    audioPlayer.pause();
-  }
-
-  function stopAudio() {
-    audioPlayer.pause();
-    audioPlayer.currentTime = 0;
-  }
-
-  function skip(seconds) {
-    audioPlayer.currentTime += seconds;
-  }
-
-  volumeSlider.addEventListener('input', function () {
-    audioPlayer.volume = this.value;
-  });
-
-  function loadPlaylist() {
-    playlistEl.innerHTML = '';
-    const tx = db.transaction('songs', 'readonly');
-    const store = tx.objectStore('songs');
-    const req = store.getAll();
-
-    req.onsuccess = () => {
-      const songs = req.result;
-      songs.forEach(song => {
-        const li = document.createElement('li');
-        li.textContent = song.name;
-        li.onclick = () => {
-          playSong(song.name);
-        };
-        playlistEl.appendChild(li);
-      });
-    };
-  }
-
-  function playSong(name) {
-    const tx = db.transaction('songs', 'readonly');
-    const store = tx.objectStore('songs');
-    const req = store.get(name);
-
-    req.onsuccess = () => {
-      const song = req.result;
-      if (song) {
-        const audioURL = URL.createObjectURL(song.blob);
-        audioPlayer.src = audioURL;
-        fileNameText.textContent = `Now playing: ${song.name}`;
-        audioPlayer.play();
-        initAudioVisualizer();
       }
-    };
-  }
-</script>
+    });
 
+    function playAudio() {
+      if (audioPlayer.src) audioPlayer.play();
+    }
 
+    function pauseAudio() {
+      audioPlayer.pause();
+    }
 
+    function stopAudio() {
+      audioPlayer.pause();
+      audioPlayer.currentTime = 0;
+    }
 
+    function skip(seconds) {
+      audioPlayer.currentTime += seconds;
+    }
 
+    volumeSlider.addEventListener('input', function () {
+      audioPlayer.volume = this.value;
+    });
 
+    function loadPlaylist() {
+      playlistEl.innerHTML = '';
+      const tx = db.transaction('songs', 'readonly');
+      const store = tx.objectStore('songs');
+      const req = store.getAll();
 
+      req.onsuccess = () => {
+        const songs = req.result;
+        songsList = songs.map(song => song.name);
+        songs.forEach(song => {
+          const li = document.createElement('li');
+          li.textContent = song.name;
+          li.onclick = () => {
+            playSong(song.name);
+          };
+          playlistEl.appendChild(li);
+        });
+      };
+    }
 
+    function playSong(name) {
+      currentSongIndex = songsList.indexOf(name);
 
+      const tx = db.transaction('songs', 'readonly');
+      const store = tx.objectStore('songs');
+      const req = store.get(name);
+
+      req.onsuccess = () => {
+        const song = req.result;
+        if (song) {
+          const audioURL = URL.createObjectURL(song.blob);
+          audioPlayer.src = audioURL;
+          fileNameText.textContent = `Now playing: ${song.name}`;
+          audioPlayer.play();
+          initAudioVisualizer();
+        }
+      };
+    }
+
+    function toggleShuffle() {
+      isShuffle = !isShuffle;
+      shuffleBtn.classList.toggle('active', isShuffle);
+    }
+
+    function toggleRepeat() {
+      isRepeat = !isRepeat;
+      repeatBtn.classList.toggle('active', isRepeat);
+    }
+
+    audioPlayer.addEventListener('ended', () => {
+      if (isRepeat) {
+        audioPlayer.currentTime = 0;
+        audioPlayer.play();
+        return;
+      }
+
+      if (isShuffle) {
+        let nextIndex;
+        do {
+          nextIndex = Math.floor(Math.random() * songsList.length);
+        } while (nextIndex === currentSongIndex && songsList.length > 1); // avoid repeating same song immediately
+
+        playSong(songsList[nextIndex]);
+        return;
+      }
+
+      if (currentSongIndex < songsList.length - 1) {
+        playSong(songsList[currentSongIndex + 1]);
+      }
+    });
+
+    // Set initial volume slider position
+    audioPlayer.volume = 0.5;
+    volumeSlider.value = 0.5;
+  </script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎶 Music Player</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      padding: 0;
+      margin: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      /* Removed old background gradient */
+      color: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Video Background */
+    #bgVideo {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      min-width: 100vw;
+      min-height: 100vh;
+      object-fit: cover;
+      z-index: -2;
+      filter: brightness(1); /* darken video for readability */
+    }
+
+    /* Optional overlay to darken video */
+    
+.container {
+  background: rgba(255, 255, 255, 0.15); /* lighter translucent white */
+  backdrop-filter: blur(5px);           /* stronger blur */
+  -webkit-backdrop-filter: blur(5px);   /* Safari support */
+  border-radius: 20px;
+  padding: 30px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  text-align: center;
+  animation: fadeIn 1s ease-in-out;
+  position: relative;
+  z-index: 1;
+}
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 20px;
+      color: #00ffcc;
+    }
+
+    input[type="file"] {
+      margin: 15px 0;
+      background: rgba(255, 255, 255, 0.15); /* lighter translucent white */
+  backdrop-filter: blur(5px);           /* stronger blur */
+  -webkit-backdrop-filter: blur(5px);   /* Safari support */
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      color: #fff;
+    }
+
+    .controls {
+      margin: 20px 0;
+    }
+
+    .controls button {
+      margin: 8px;
+      padding: 12px 18px;
+      font-size: 16px;
+      border: none;
+      border-radius: 30px;
+      background: #00ffcc;
+      color: #000;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0,255,204,0.4);
+    }
+
+    .controls button:hover {
+      transform: scale(1.05);
+      background: #2085dc;
+    }
+
+    .volume-control {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .volume-control input[type="range"] {
+      width: 150px;
+    }
+
+    #fileName {
+      margin: 10px 0;
+      font-style: italic;
+      color: #ccc;
+    }
+
+    audio {
+      display: none;
+    }
+
+    canvas {
+      width: 100%;
+      height: 60px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      margin-top: 20px;
+    }
+
+    .playlist {
+      margin-top: 20px;
+      text-align: left;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .playlist li {
+      list-style: none;
+      padding: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .playlist li:hover {
+        background: rgba(41, 140, 233, 0.27); /* lighter translucent white */
+  backdrop-filter: blur(5px);           /* stronger blur */
+  -webkit-backdrop-filter: blur(5px);   /* Safari support */
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Scrollbar */
+    .playlist::-webkit-scrollbar {
+      width: 6px;
+    }
+    .playlist::-webkit-scrollbar-thumb {
+      background: #00ffcc;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Video background -->
+  <video autoplay muted loop id="bgVideo">
+    <source src="C:\\Users\\Apollodart\\Downloads\\bg.mp4" type="video/mp4" />
+    Your browser does not support the video tag.
+  </video>
+
+  <div class="container">
+    <h1>🎶 Music Player</h1>
+
+    <input type="file" id="fileInput" accept="audio/*" />
+    <p id="fileName">No file selected.</p>
+
+    <div class="controls">
+      <button onclick="playAudio()">▶</button>
+      <button onclick="pauseAudio()">⏸</button>
+      <button onclick="stopAudio()">⏹</button>
+      <button onclick="skip(-10)">⏪</button>
+      <button onclick="skip(10)">⏩</button>
+    </div>
+
+    <div class="volume-control">
+      <span>🔊</span>
+      <input type="range" id="volumeSlider" min="0" max="1" step="0.01" />
+    </div>
+
+    <canvas id="visualizer" width="400" height="60"></canvas>
+
+    <ul class="playlist" id="playlist"></ul>
+
+    <audio id="audioPlayer" controls></audio>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const fileNameText = document.getElementById('fileName');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const playlistEl = document.getElementById('playlist');
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
+
+    let audioURL = null;
+    let audioCtx, analyser, source, dataArray, bufferLength;
+
+    const playlist = JSON.parse(localStorage.getItem('playlist') || '[]');
+
+    function initAudioVisualizer() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        source = audioCtx.createMediaElementSource(audioPlayer);
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        analyser.fftSize = 64;
+        bufferLength = analyser.frequencyBinCount;
+        dataArray = new Uint8Array(bufferLength);
+        drawVisualizer();
+      }
+    }
+
+    function drawVisualizer() {
+      requestAnimationFrame(drawVisualizer);
+
+      analyser.getByteFrequencyData(dataArray);
+      ctx.fillStyle = "rgba(255,255,255,0.05)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const barWidth = (canvas.width / bufferLength);
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = dataArray[i] / 2;
+        ctx.fillStyle = `rgb(${barHeight + 100}, ${200 - barHeight}, 255)`;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+        x += barWidth;
+      }
+    }
+
+    fileInput.addEventListener('change', function () {
+      const file = this.files[0];
+      if (file && file.type.startsWith('audio/')) {
+        if (audioURL) {
+          URL.revokeObjectURL(audioURL);
+        }
+
+        audioURL = URL.createObjectURL(file);
+        audioPlayer.src = audioURL;
+        audioPlayer.style.display = 'block';
+        fileNameText.textContent = `Now playing: ${file.name}`;
+        addToPlaylist(file.name, audioURL);
+        initAudioVisualizer();
+        audioPlayer.play();
+      }
+    });
+
+    function playAudio() {
+      if (audioPlayer.src) audioPlayer.play();
+    }
+
+    function pauseAudio() {
+      audioPlayer.pause();
+    }
+
+    function stopAudio() {
+      audioPlayer.pause();
+      audioPlayer.currentTime = 0;
+    }
+
+    function skip(seconds) {
+      audioPlayer.currentTime += seconds;
+    }
+
+    volumeSlider.addEventListener('input', function () {
+      audioPlayer.volume = this.value;
+    });
+
+    function addToPlaylist(name, url) {
+      if (!playlist.some(item => item.name === name)) {
+        playlist.push({ name, url });
+        localStorage.setItem('playlist', JSON.stringify(playlist));
+        renderPlaylist();
+      }
+    }
+
+    function renderPlaylist() {
+      playlistEl.innerHTML = '';
+      playlist.forEach(song => {
+        const li = document.createElement('li');
+        li.textContent = song.name;
+        li.onclick = () => {
+          audioPlayer.src = song.url;
+          fileNameText.textContent = `Now playing: ${song.name}`;
+          audioPlayer.play();
+        };
+        playlistEl.appendChild(li);
+      });
+    }
+
+    renderPlaylist();
+  </script>
+</body>
+</html>
